@@ -45,6 +45,16 @@ _SV_DOLLAR_ERROR = re.compile(
     r"(?:^|\s)\$error\b.*?(?P<file>[^\s(]+)\((?P<line>\d+)\)(?::\s*(?P<msg>.+))?"
 )
 
+# Icarus Verilog (iverilog) errors:
+# filename.v:42: error: Unable to bind wire/reg...
+# filename.v:42: warning: ...  (warnings optionally parsed)
+_ICARUS_ERROR = re.compile(
+    r"^(?P<file>[^:]+):(?P<line>\d+):\s+error:\s+(?P<msg>.+)"
+)
+_ICARUS_FATAL = re.compile(
+    r"^(?P<file>[^:]+):(?P<line>\d+):\s+(?:fatal error|internal error):\s+(?P<msg>.+)"
+)
+
 # Sim time extraction: "# Time: 1250 ns" or "Time = 1250"
 _SIM_TIME = re.compile(
     r"(?:Time\s*[:=]\s*)(?P<time>\d+\s*(?:ns|ps|us|fs)?)", re.IGNORECASE
@@ -202,6 +212,32 @@ class LogParser:
             is_fatal = "fatal" in line.lower()
             return ParsedErrorDict(
                 error_type=self._classify(fp, is_fatal=is_fatal),
+                file_path=fp,
+                line_number=int(m.group("line")),
+                message=m.group("msg").strip(),
+                sim_time=sim_time,
+                test_name=test_name,
+            )
+
+        # 7. Icarus Verilog fatal/internal error
+        m = _ICARUS_FATAL.match(line)
+        if m:
+            fp = m.group("file")
+            return ParsedErrorDict(
+                error_type="FATAL",
+                file_path=fp,
+                line_number=int(m.group("line")),
+                message=m.group("msg").strip(),
+                sim_time=sim_time,
+                test_name=test_name,
+            )
+
+        # 8. Icarus Verilog error
+        m = _ICARUS_ERROR.match(line)
+        if m:
+            fp = m.group("file")
+            return ParsedErrorDict(
+                error_type=self._classify(fp),
                 file_path=fp,
                 line_number=int(m.group("line")),
                 message=m.group("msg").strip(),
