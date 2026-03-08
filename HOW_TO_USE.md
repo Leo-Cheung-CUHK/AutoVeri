@@ -138,13 +138,19 @@ Job status: analyzing  ← you get an email notification here
 
 Open **`http://localhost:5173`** → **Jobs** → click the job.
 
-You will see:
+The dashboard shows all jobs for your project with their current status:
+
+![Dashboard — job list](Image/HomePage.png)
+
+Click into any job to see the full AI debug result:
 
 - **Errors found** — each error classified as `RTL_ERROR`, `TB_ERROR`, or `FATAL`, with file name and line number
 - **Root cause** — AI's one-line diagnosis
 - **Explanation** — detailed reasoning from GPT-4o
 - **Confidence** — `high`, `medium`, or `low`
 - **Proposed patch** — syntax-highlighted unified diff
+
+![Job detail — AI debug result and proposed patch](Image/ExampleJob.png)
 
 ### 10. Approve or Reject
 
