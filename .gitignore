@@ -33,3 +33,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Test projects (cloned repos for feasibility testing)
+test_projects/*/
