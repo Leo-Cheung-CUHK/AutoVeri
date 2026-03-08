@@ -2,6 +2,59 @@
 
 ---
 
+## Product Roadmap
+
+### v1 — Foundation (Current)
+
+Core pipeline is live. Covers the full loop from git push to AI-proposed patch with human approval.
+
+| # | Feature | Status |
+|---|---------|--------|
+| 1 | Git push webhook trigger | Done |
+| 2 | Local runner (Verilator) | Done |
+| 3 | Log parser — RTL_ERROR / TB_ERROR / FATAL classification | Done |
+| 4 | Debug Agent (GPT-4o) — root cause + unified diff patch | Done |
+| 5 | Iterative refinement loop (max 3 iterations) | Done |
+| 6 | Human-in-the-loop approval gate (Approve / Reject / Expire) | Done |
+| 7 | Web dashboard — job list, AI result, syntax-highlighted diff | Done |
+| 8 | GitHub + GitLab OAuth | Done |
+| 9 | Email notification on fix ready | Done |
+
+**Target users:** Chip startups, FPGA design teams, open-source RTL projects using Verilator.
+
+---
+
+### v2 — Reach & Stickiness (Next)
+
+Removes the biggest adoption friction, broadens simulator support, and adds the coverage data that makes verification quality visible.
+
+| # | Feature | Value |
+|---|---------|-------|
+| 1 | **Hosted runner** — no local install required | Removes #1 setup friction; cloud-managed execution |
+| 2 | **Icarus Verilog support** | Opens university and open-source market |
+| 3 | **Coverage reporter** — line, toggle, branch coverage | Answers "is this design well-tested?"; unlocks exec dashboard |
+| 4 | **Executive dashboard** — coverage trends, job history, pass rate | Makes verification quality visible to engineering managers |
+| 5 | **Slack / Teams notifications** | Meets engineers where they work |
+| 6 | **Confidence threshold gate** — configurable per project | High-confidence patches surface automatically; medium/low show root cause only |
+| 7 | **RAG on project history** — AI learns from past bugs in your codebase | Improves patch quality over time; first step toward a defensible moat |
+
+---
+
+### v3 — Moat & Upmarket (Future)
+
+Moves into enterprise accounts and builds the proprietary knowledge layer that makes AutoVerif hard to replicate.
+
+| # | Feature | Value |
+|---|---------|-------|
+| 1 | **VCS / Questa / Xcelium support** | Unlocks commercial teams; opens $5K–$20K/yr deal size |
+| 2 | **Fine-tuned model on RTL error patterns** | AI trained on hardware-specific failures; out-performs generic LLMs |
+| 3 | **Formal verification integration** — lint + property checking hooks | Shifts verification left; catches bugs before simulation |
+| 4 | **GitHub PR / GitLab MR native bot** — approve patches via PR comment | Zero-friction review workflow; feels native to the dev process |
+| 5 | **Multi-project analytics & CI badge** | Team-wide verification health visible to CTOs and investors |
+| 6 | **SSO + RBAC + audit log** | Enterprise security and compliance requirements |
+
+---
+
 ## One-time Setup
 
 ### 1. Start the stack
