@@ -1,0 +1,14 @@
+# AutoVerif Runner — Python dependencies
+# Install with: pip install -r requirements.txt
+
+# CLI framework
+click>=8.1
+
+# Async-capable HTTP client (used synchronously here for simplicity)
+httpx>=0.27
+
+# Git operations (used for validation; subprocess used for git commands)
+gitpython>=3.1
+
+# Rich terminal output — coloured logs, tables, spinners
+rich>=13.0
