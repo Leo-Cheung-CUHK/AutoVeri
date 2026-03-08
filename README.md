@@ -1,346 +1,194 @@
-# AutoVerif AI
-
-AI-powered CI/CD framework for RTL regression testing. AutoVerif monitors your HDL repository for push events, runs simulations locally via a lightweight agent, parses error logs, calls GPT-4o to diagnose root causes and generate patches, and presents the fix for human review in a web dashboard.
+# AutoVerif AI — How to Use It
 
 ---
 
-## How It Works
+## One-time Setup
 
-```
-Git push
-   │
-   ▼
-Webhook ──► Cloud Backend (FastAPI)
-                │  creates Job (queued)
-                ▼
-         Runner polls cloud
-                │  claims Job
-                ▼
-         Runs simulation locally
-         (verilator / make sim)
-                │  uploads sim.log + git diff
-                ▼
-         Backend parses errors
-         Background task calls GPT-4o
-                │  stores DebugResult
-                ▼
-         Job status → analyzing
-                │
-                ▼
-         Developer reviews in Web UI
-         (root cause · explanation · diff)
-                │
-         ┌──────┴──────┐
-       Approve        Reject
-         │
-         ▼
-       Runner applies patch
-       pushes branch autoverif/fix-*
-         │
-         ▼
-       Backend re-queues for re-simulation
-       (up to 3 iterations)
-```
-
----
-
-## Repository Structure
-
-```
-AutoVeri/
-├── backend/                    # FastAPI cloud service
-│   ├── app/
-│   │   ├── main.py             # App entry point, CORS, router wiring
-│   │   ├── core/
-│   │   │   ├── config.py       # Pydantic-settings (env vars)
-│   │   │   └── database.py     # SQLAlchemy async engine + session factory
-│   │   ├── models/
-│   │   │   └── models.py       # SQLAlchemy ORM models (6 tables)
-│   │   ├── routers/
-│   │   │   ├── auth.py         # GitHub + GitLab OAuth2, JWT issuance
-│   │   │   ├── projects.py     # Project CRUD + git webhook receiver
-│   │   │   ├── runners.py      # Runner registration, job polling, log upload,
-│   │   │   │                   #   AI analysis background task, patch delivery
-│   │   │   └── jobs.py         # Job listing, detail view, approve/reject
-│   │   └── services/
-│   │       ├── log_parser.py   # Regex parser for Verilator/UVM/SV error patterns
-│   │       ├── debug_agent.py  # GPT-4o client; produces root_cause + unified diff patch
-│   │       └── refinement_loop.py  # Multi-iteration loop skeleton (v2)
-│   ├── requirements.txt
-│   ├── Dockerfile
-│   └── .env.example
-│
-├── runner/                     # Local simulation agent (pip-installable CLI)
-│   ├── autoverif_runner/
-│   │   ├── main.py             # CLI commands: register · start · status
-│   │   ├── config.py           # Read/write ~/.autoverif/config.json
-│   │   ├── poller.py           # Polling loop: claim → simulate → upload → patch → apply
-│   │   ├── simulator.py        # Runs sim command, collects log + git diff + file snippets
-│   │   ├── uploader.py         # POSTs sim.log + git diff to cloud
-│   │   └── patcher.py          # Applies unified diff, commits, pushes new branch
-│   ├── requirements.txt
-│   └── setup.py
-│
-├── frontend/                   # React + Tailwind web dashboard
-│   ├── src/
-│   │   ├── App.jsx             # Router setup
-│   │   ├── api/client.js       # Axios wrapper for all API calls
-│   │   ├── pages/
-│   │   │   ├── Login.jsx       # GitHub / GitLab OAuth entry
-│   │   │   ├── Dashboard.jsx   # Project list + recent jobs overview
-│   │   │   ├── JobList.jsx     # Filterable job table for a project
-│   │   │   ├── JobDetail.jsx   # Full job view: errors · AI result · diff · approve/reject
-│   │   │   ├── ProjectNew.jsx  # Create project form
-│   │   │   └── ProjectSettings.jsx  # Edit project + runner setup instructions
-│   │   └── components/
-│   │       ├── Layout.jsx      # Nav shell
-│   │       ├── JobStatusBadge.jsx   # Coloured status pill
-│   │       ├── DiffViewer.jsx  # Syntax-highlighted unified diff
-│   │       └── RunnerSetup.jsx # Copy-paste runner install instructions
-│   └── package.json
-│
-├── docker-compose.yml          # Postgres + Redis + Backend + Frontend
-└── README.md
-```
-
----
-
-## Database Schema
-
-| Table | Purpose |
-|---|---|
-| `users` | OAuth-authenticated users (GitHub or GitLab) |
-| `projects` | HDL repos with sim command, patterns, webhook secret |
-| `runners` | Registered runner agents per project |
-| `jobs` | One job per push event; tracks status through the pipeline |
-| `job_iterations` | One record per AI fix attempt (max 3) |
-| `parsed_errors` | Structured errors extracted from each sim log |
-| `debug_results` | GPT-4o output: root cause, patch, confidence, approval state |
-
-**Job status lifecycle:**
-```
-queued → running → logs_uploaded → analyzing → completed
-                                              → failed
-                                              → timeout
-```
-
----
-
-## Prerequisites
-
-| Component | Requirement |
-|---|---|
-| Backend | Python 3.10+, PostgreSQL 15, Redis 7 |
-| Frontend | Node.js 20+ |
-| Runner | Python 3.10+, git, Verilator (or other simulator) |
-| AI | OpenAI API key (GPT-4o) |
-| Auth | GitHub OAuth App and/or GitLab OAuth App |
-
----
-
-## Local Development Setup
-
-### 1. Clone and configure environment
+### 1. Start the stack
 
 ```bash
-git clone <repo-url>
 cd AutoVeri
-
-cp backend/.env.example backend/.env
-# Edit backend/.env — fill in SECRET_KEY, OAuth credentials, OPENAI_API_KEY
+docker-compose up -d
 ```
 
-Generate a secret key:
-```bash
-openssl rand -hex 32
+Wait ~10 seconds. Four services start:
+
+| Service | Port |
+|---|---|
+| Backend API | 8000 |
+| Frontend dashboard | 5173 |
+| PostgreSQL | 5432 |
+| Redis | 6379 |
+
+### 2. Create a GitHub OAuth App
+
+Go to **GitHub → Settings → Developer settings → OAuth Apps → New OAuth App** and fill in:
+
+| Field | Value |
+|---|---|
+| Application name | AutoVerif AI |
+| Homepage URL | `http://localhost:8000` |
+| Authorization callback URL | `http://localhost:8000/auth/github/callback` |
+
+Copy the **Client ID** and **Client Secret** into `backend/.env`:
+
+```env
+GITHUB_CLIENT_ID=<your-client-id>
+GITHUB_CLIENT_SECRET=<your-client-secret>
+OPENAI_API_KEY=sk-...
+SECRET_KEY=<output of: openssl rand -hex 32>
 ```
 
-### 2. Start infrastructure with Docker Compose
+### 3. Log in
 
-```bash
-docker-compose up -d db redis
-```
-
-This starts PostgreSQL on port `5432` and Redis on port `6379`.
-
-### 3. Start the backend
-
-```bash
-cd backend
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
-```
-
-The API is available at `http://localhost:8000`.
-Interactive docs: `http://localhost:8000/docs`
-
-Tables are created automatically on first startup via SQLAlchemy.
-
-### 4. Start the frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-The dashboard is available at `http://localhost:5173`.
-
-### 5. Run all services via Docker Compose (optional)
-
-```bash
-docker-compose up --build
-```
-
-Services: backend on `8000`, frontend on `5173`, Postgres on `5432`, Redis on `6379`.
+Open **`http://localhost:5173`** and click **Sign in with GitHub**.
 
 ---
 
-## Runner Setup (on the machine with Verilator)
+## Per-Project Setup (do once per repo)
 
-### Install
+### 4. Create a project
+
+Click **New Project** and fill in:
+
+| Field | Description | Example |
+|---|---|---|
+| Name | Display name | `My ALU Core` |
+| Repo URL | Full HTTPS URL of your repo | `https://github.com/you/alu-core` |
+| Git provider | GitHub or GitLab | `github` |
+| Sim command | Command that runs your simulation | `make sim` |
+| TB folder pattern | Prefix of your testbench files | `tb_` |
+| RTL folder pattern | Prefix of your RTL source files | `rtl_` |
+| Timeout | Max minutes per job | `30` |
+
+Click **Create**. Copy the **webhook secret** shown on the project settings page.
+
+### 5. Add the webhook to your repo
+
+In your GitHub repo: **Settings → Webhooks → Add webhook**
+
+| Field | Value |
+|---|---|
+| Payload URL | `http://<your-server>:8000/projects/<project-id>/webhook` |
+| Content type | `application/json` |
+| Secret | paste the webhook secret from Step 4 |
+| Events | Just the push event |
+
+> **GitLab:** Settings → Webhooks → same URL, paste secret as "Secret token", enable Push events.
+
+### 6. Install and register the runner
+
+The runner must be installed on the machine where your simulator lives.
 
 ```bash
 cd runner
 pip install -e .
 ```
 
-Or directly from the repo root:
-```bash
-pip install -r runner/requirements.txt
-```
-
-### Register
-
-Get your **project token** from the project settings page in the web UI (it is the `webhook_secret`).
+Register it using the webhook secret from Step 4:
 
 ```bash
 autoverif-runner register \
-  --server https://your-autoverif-instance.com \
-  --token <project-token> \
+  --server http://localhost:8000 \
+  --token <webhook-secret> \
   --name my-workstation
 ```
 
 Config is saved to `~/.autoverif/config.json`.
 
-### Start
+Start the runner, pointing it at your local repo:
 
 ```bash
 autoverif-runner start --repo /path/to/your/hdl/repo
 ```
 
-The runner polls the cloud every 10 seconds for new jobs.
+The runner polls for new jobs every 10 seconds.
 
-### Status check
+---
+
+## Normal Workflow (every push)
+
+### 7. Push code as normal
 
 ```bash
-autoverif-runner status
+git push origin main
 ```
 
----
+### 8. AutoVerif takes over automatically
 
-## Git Webhook Configuration
+The pipeline runs without any further action from you:
 
-After creating a project in the web UI, configure your repo to send push events:
+```
+git push
+    │
+    ▼
+Webhook → job created (queued)
+    │
+    ▼
+Runner picks up job → runs sim command → uploads sim.log + git diff
+    │
+    ▼
+Backend parses errors → calls GPT-4o
+    │
+    ▼
+Job status: analyzing  ← you get an email notification here
+```
 
-**GitHub:**
-- Settings → Webhooks → Add webhook
-- Payload URL: `https://your-backend/projects/<project-id>/webhook`
-- Content type: `application/json`
-- Secret: the project token from project settings
-- Events: `Just the push event`
+### 9. Review the AI fix in the dashboard
 
-**GitLab:**
-- Settings → Webhooks
-- URL: `https://your-backend/projects/<project-id>/webhook`
-- Secret token: the project token from project settings
-- Trigger: Push events
+Open **`http://localhost:5173`** → **Jobs** → click the job.
 
----
+The dashboard shows all jobs for your project with their current status:
 
-## End-to-End Flow
+![Dashboard — job list](Image/HomePage.png)
 
-1. Developer pushes a commit with an RTL bug
-2. Webhook fires → backend creates a `queued` job
-3. Runner picks up the job, runs `make sim` (or configured command)
-4. Runner uploads `sim.log` + `git diff` to the cloud
-5. Backend parses errors (Verilator `%Error`, UVM `UVM_ERROR`, `$fatal`, etc.)
-6. Background task calls GPT-4o → produces root cause, explanation, unified diff patch
-7. Job status transitions to `analyzing`; developer gets an email notification
-8. Developer opens the web UI → sees the AI's explanation and syntax-highlighted diff
-9. **Approve** → runner applies the patch, creates branch `autoverif/fix-<sha>-<ts>`, pushes, opens PR
-10. **Reject** → job closed, no changes made
-11. On approval, backend re-queues the job for re-simulation (up to 3 iterations)
+Click into any job to see the full AI debug result:
 
----
+- **Errors found** — each error classified as `RTL_ERROR`, `TB_ERROR`, or `FATAL`, with file name and line number
+- **Root cause** — AI's one-line diagnosis
+- **Explanation** — detailed reasoning from GPT-4o
+- **Confidence** — `high`, `medium`, or `low`
+- **Proposed patch** — syntax-highlighted unified diff
 
-## API Overview
+![Job detail — AI debug result and proposed patch](Image/ExampleJob.png)
 
-All routes are documented at `/docs` (Swagger UI) or `/redoc`.
+### 10. Approve or Reject
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| `GET` | `/health` | — | Service health check |
-| `GET` | `/auth/github` | — | Redirect to GitHub OAuth |
-| `GET` | `/auth/github/callback` | — | GitHub OAuth callback, returns JWT |
-| `GET` | `/auth/gitlab` | — | Redirect to GitLab OAuth |
-| `GET` | `/auth/gitlab/callback` | — | GitLab OAuth callback, returns JWT |
-| `GET` | `/auth/me` | JWT | Current user info |
-| `GET` | `/projects` | JWT | List user's projects |
-| `POST` | `/projects` | JWT | Create project |
-| `GET` | `/projects/{id}` | JWT | Project detail |
-| `PUT` | `/projects/{id}` | JWT | Update project |
-| `DELETE` | `/projects/{id}` | JWT | Delete project |
-| `POST` | `/projects/{id}/webhook` | HMAC | Receive git push event |
-| `POST` | `/runners/register` | project token | Register a new runner |
-| `GET` | `/runners/jobs` | runner token | Poll for queued jobs |
-| `POST` | `/runners/jobs/{id}/claim` | runner token | Claim a job |
-| `POST` | `/runners/jobs/{id}/logs` | runner token | Upload sim log (triggers AI) |
-| `GET` | `/runners/jobs/{id}/status` | runner token | Poll job status |
-| `GET` | `/runners/jobs/{id}/patch` | runner token | Fetch approved patch |
-| `POST` | `/runners/jobs/{id}/apply` | runner token | Confirm patch applied |
-| `GET` | `/jobs` | JWT | List jobs |
-| `GET` | `/jobs/{id}` | JWT | Full job detail |
-| `POST` | `/jobs/{id}/approve` | JWT | Approve AI fix |
-| `POST` | `/jobs/{id}/reject` | JWT | Reject AI fix |
-
----
-
-## Error Classification
-
-The log parser classifies each error by filename prefix (configurable per project):
-
-| Type | Rule | Example |
-|---|---|---|
-| `TB_ERROR` | File starts with `tb_` | `tb_alu_top.sv:42` |
-| `RTL_ERROR` | File starts with `rtl_` or `src_` | `rtl_adder.sv:17` |
-| `FATAL` | `%Fatal`, `$fatal`, `UVM_FATAL` | simulation abort |
-
-Supported simulators: **Verilator** (`%Error`, `%Fatal`), **ModelSim/Questa** (`** Error`, `** Fatal`), **UVM** (`UVM_ERROR`, `UVM_FATAL`), and generic SystemVerilog (`$error`, `$fatal`).
-
----
-
-## v1 Scope and Limitations
-
-- Triggers on **git push** only (no manual or scheduled runs)
-- Simulation runs **locally** on the registered runner machine; only logs are sent to the cloud
-- **Max 3 refinement iterations** per job
-- Human approval is required in the web UI before any patch is applied
-- No coverage reporting in v1
-- Billing is manual for the first pilot customers
-
-Features planned for v2: test generation agent, coverage reporter, RAG knowledge base, multi-simulator support, executive dashboard.
-
----
-
-## Tech Stack
-
-| Layer | Technology |
+| Button | What happens |
 |---|---|
-| Backend API | Python 3.10+, FastAPI, SQLAlchemy (async), asyncpg |
-| AI | OpenAI GPT-4o |
-| Database | PostgreSQL 15 |
-| Cache / Queue | Redis 7 |
-| Runner CLI | Python, Click, httpx, Rich |
-| Frontend | React 18, Vite, Tailwind CSS, React Router |
-| Deployment | Docker / Docker Compose |
+| **Approve** | Runner applies the patch, creates branch `autoverif/fix-<sha>`, pushes it to your repo |
+| **Reject** | Job closed, no changes made to your repo |
+| *(do nothing)* | Approval expires after 7 days |
+
+After approval the job re-queues and the runner re-runs the simulation with the patch applied. If errors remain, the AI tries again — up to **3 iterations** total.
+
+---
+
+## Key Things to Know
+
+- **Your simulator runs locally.** Only the log file and git diff are sent to the cloud. Your source code never leaves your machine.
+- **Nothing is applied without your approval.** Every patch goes through the human-in-the-loop gate.
+- **Max 3 AI iterations per job.** If the simulation still fails after 3 attempts, the job is marked `failed` and you handle it manually.
+- **Confidence levels:**
+  - `high` — AI is confident in both the diagnosis and the fix
+  - `medium` — diagnosis is likely correct; patch may need minor adjustment
+  - `low` — explanation provided, but no automated patch generated
+- **Error classification** is based on filename prefix (configured per project):
+  - `tb_*` → `TB_ERROR` (testbench issue)
+  - `rtl_*` / `src_*` → `RTL_ERROR` (RTL source issue)
+  - `%Fatal` / `$fatal` / `UVM_FATAL` → `FATAL`
+
+---
+
+## Quick Reference
+
+| Task | Where |
+|---|---|
+| View all jobs | Dashboard → Jobs |
+| See AI result + diff | Jobs → click job |
+| Approve / Reject a fix | Jobs → job detail → buttons |
+| Change sim command or timeout | Projects → Settings |
+| Get runner registration token | Projects → Settings (webhook secret) |
+| Check runner is connected | `autoverif-runner status` |
+| Stop the runner | `Ctrl+C` in the terminal running `autoverif-runner start` |
+| Stop all services | `docker-compose down` |
