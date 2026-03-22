@@ -1,5 +1,9 @@
 # AutoVerif AI
 
+![Dashboard — job list](Image/HomePage.png)
+
+![Job detail — AI debug result and proposed patch](Image/ExampleJob.png)
+
 ---
 
 ## What is AutoVerif AI?
@@ -205,8 +209,6 @@ Open **`http://localhost:5173`** → **Jobs** → click the job.
 
 The dashboard shows all jobs for your project with their current status:
 
-![Dashboard — job list](Image/HomePage.png)
-
 Click into any job to see the full AI debug result:
 
 - **Errors found** — each error classified as `RTL_ERROR`, `TB_ERROR`, or `FATAL`, with file name and line number
@@ -214,8 +216,6 @@ Click into any job to see the full AI debug result:
 - **Explanation** — detailed reasoning from GPT-4o
 - **Confidence** — `high`, `medium`, or `low`
 - **Proposed patch** — syntax-highlighted unified diff
-
-![Job detail — AI debug result and proposed patch](Image/ExampleJob.png)
 
 ### 10. Approve or Reject
 
