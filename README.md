@@ -1,4 +1,16 @@
-# AutoVerif AI — How to Use It
+# AutoVerif AI
+
+---
+
+## What is AutoVerif AI?
+
+AutoVerif AI is an LLM-powered CI/CD framework for RTL regression testing. It connects to your Git repository, runs your Verilog/SystemVerilog simulation automatically on every push, and uses GPT-4o to diagnose failures and propose a ready-to-apply patch — all without touching your source code.
+
+**The problem it solves:** RTL debug cycles are slow. A failing simulation produces cryptic log output, and tracking down whether the bug is in the RTL, the testbench, or the simulation setup takes hours. AutoVerif automates that triage loop.
+
+**Who it's for:** Chip startups, FPGA design teams, and open-source RTL projects using Verilator or Icarus Verilog that want faster iteration without sacrificing review control.
+
+**How it works (in one paragraph):** When you `git push`, a webhook triggers a job. Your local runner (installed on the machine with the simulator) picks up the job, runs your sim command, and uploads only the log file and git diff — your source code never leaves your machine. The backend classifies errors, calls GPT-4o for root cause analysis and a unified diff patch, and presents the result in a web dashboard. You review the proposed fix and click Approve or Reject. Nothing is applied without your sign-off.
 
 ---
 
